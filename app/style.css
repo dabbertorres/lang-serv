@@ -1,0 +1,65 @@
+.directoryTree
+{
+    border:   1px solid black;
+    overflow: auto;
+    flex:     1;
+}
+
+.directoryTree ul
+{
+    list-style-type: none;
+    padding-left:    20px;
+}
+
+.directoryTree li > * + span
+{
+    transition: opacity 250ms ease-in-out;
+    opacity:    0.0;
+}
+
+.directoryTree li > * + span:hover
+{
+    opacity: 1.0;
+}
+
+.directoryTree li > *:hover + span
+{
+    opacity: 1.0;
+}
+
+.directoryTree li > span > button
+{
+    background: transparent no-repeat;
+    border:     none;
+    outline:    none;
+    cursor:     pointer;
+}
+
+.directoryTree li > span > button > img
+{
+    height: 1em;
+    width:  auto;
+}
+
+.CodeMirror
+{
+    border: 1px solid black;
+    height: 600px;
+    flex:   4;
+}
+
+main
+{
+    display: flex;
+}
+
+.output
+{
+    display: block;
+    width:   100%;
+}
+
+hr
+{
+    margin: 20px 0;
+}

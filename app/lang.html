@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>{{ .Language }}-{{ .Version }}</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.35.0/codemirror.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.35.0/codemirror.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.35.0/mode/meta.min.js"></script>
+    <!-- we don't load any modes here, as we load them only as needed -->
+    <script defer src="lang.js"></script>
+
+    <template id="fileTemplate">
+        <li>
+            <a href="#">filename</a>
+            <span><button class="delete"><img src="delete.svg"></button></span>
+        </li>
+    </template>
+    <template id="dirTemplate">
+        <li>
+            <span>baz</span>
+            <span>
+                <button class="new"><img src="new.svg"></button>
+                <button class="delete"><img src="delete.svg"></button>
+            </span>
+            <ul></ul>
+        </li>
+    </template>
+</head>
+<body>
+    <header>
+        <h1>{{ .Language }}-{{ .Version }}</h1>
+    </header>
+    <main>
+        <nav class="directoryTree">
+            <ul>
+                <!-- doesn't make sense to delete the root directory, so don't use the dir template -->
+                <li id="pwd">
+                    <span>/</span>
+                    <span>
+                        <button class="new button"><img src="new.svg"></button>
+                    </span>
+                    <ul></ul>
+                </li>
+            </ul>
+        </nav>
+        <textarea class="editor" title="fileName"></textarea>
+    </main>
+    <hr>
+    <label for="cmd">Command:</label><input type="text" id="cmd">
+    <button id="submitButton">Run</button>
+    <h3>Output</h3>
+    <textarea class="output" title="output" rows="24" readonly></textarea>
+    <footer></footer>
+</body>
+</html>
