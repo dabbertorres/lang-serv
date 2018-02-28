@@ -5,15 +5,15 @@ type File struct {
 	Data string `json:"data"`
 }
 
-type LanguagePost struct {
+type LanguagePostData struct {
 	Cmd   string `json:"cmd"`
 	Files []File `json:"files"`
 }
 
-type LanguagePageData struct {
-	Language string
-	Version  string
+type LanguageGetData struct {
+	Language   string
+	Version    string
 }
 
-type IndexPageData struct {
+type IndexGetData struct {
 }

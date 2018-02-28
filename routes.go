@@ -31,13 +31,9 @@ func Route() (router *mux.Router) {
 		Methods(http.MethodGet).
 		HandlerFunc(staticFileHandler("app/lang.js"))
 
-	router.Path("/new.svg").
-		Methods(http.MethodGet).
-		HandlerFunc(staticFileHandler("app/new.svg"))
-
-	router.Path("/delete.svg").
-		Methods(http.MethodGet).
-		HandlerFunc(staticFileHandler("app/delete.svg"))
+	// don't match favicon stuff to the language path
+	router.Path("/{.*icon.*}").
+		Handler(http.NotFoundHandler())
 
 	languageRouter := router.Path("/{language}/{version}").Subrouter()
 
@@ -66,9 +62,9 @@ func Route() (router *mux.Router) {
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	err := IndexPage(w, IndexPageData{})
+	err := IndexPage(w, IndexGetData{})
 	if err != nil {
-		log.Printf("%s: %s\n", r.RequestURI, err)
+		log.Printf("[ERROR] %s: %s\n", r.RequestURI, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -78,7 +74,7 @@ func staticFileHandler(filename string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		buf, err := ioutil.ReadFile(filename)
 		if err != nil {
-			log.Printf("%s: %s\n", r.RequestURI, err)
+			log.Printf("[ERROR] %s: %s\n", r.RequestURI, err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -91,31 +87,31 @@ func staticFileHandler(filename string) http.HandlerFunc {
 func languageGetHandler(w http.ResponseWriter, r *http.Request) {
 	session, err := sessionStore.Get(r, sessionCookieKey)
 	if err != nil {
-		log.Printf("%s: %s\n", r.RequestURI, err)
+		log.Printf("[ERROR] %s: %s\n", r.RequestURI, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	err = SessionRun(session, r)
 	if err != nil {
-		log.Printf("%s: %s\n", r.RequestURI, err)
+		log.Printf("[ERROR] %s: %s\n", r.RequestURI, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	err = session.Save(r, w)
 	if err != nil {
-		log.Printf("%s: %s\n", r.RequestURI, err)
+		log.Printf("[ERROR] %s: %s\n", r.RequestURI, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	err = LanguagePage(w, LanguagePageData{
+	err = LanguagePage(w, LanguageGetData{
 		Language: mux.Vars(r)["language"],
 		Version:  mux.Vars(r)["version"],
 	})
 	if err != nil {
-		log.Printf("%s: %s\n", r.RequestURI, err)
+		log.Printf("[ERROR] %s: %s\n", r.RequestURI, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -126,21 +122,21 @@ func languagePostHandler(w http.ResponseWriter, r *http.Request) {
 
 	session, err := sessionStore.Get(r, sessionCookieKey)
 	if err != nil {
-		log.Printf("%s: %s\n", r.RequestURI, err)
+		log.Printf("[ERROR] %s: %s\n", r.RequestURI, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if session.IsNew {
 		// TODO this isn't necessarily a problem
-		log.Printf("%s: %s\n", r.RequestURI, "new session in POST")
+		log.Printf("[ERROR] %s: %s\n", r.RequestURI, "new session in POST")
 		session.Options.MaxAge = -1
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
 
 	var (
-		post         = LanguagePost{}
+		post         = LanguagePostData{}
 		ctnr         = session.Values[sessionContainerKey].(string)
 		filesArchive = bytes.NewBuffer(nil)
 		tarW         = tar.NewWriter(filesArchive)

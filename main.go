@@ -11,7 +11,6 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/gorilla/handlers"
-	"github.com/gorilla/securecookie"
 	"github.com/gorilla/sessions"
 )
 
@@ -22,10 +21,12 @@ var (
 	exitCode = 0
 
 	logToFile bool
+	authKeyFile = "auth.keys"
 )
 
 func init() {
 	flag.BoolVar(&logToFile, "log-file", false, "passing enables duplicating logs to a log file")
+	flag.StringVar(&authKeyFile, "auth-file", authKeyFile, "specify a file to use for storing session authentication keys")
 
 	var err error
 	docker, err = client.NewEnvClient()
@@ -56,13 +57,17 @@ func main() {
 
 	/* sessions */
 
-	sessionStore = sessions.NewCookieStore(securecookie.GenerateRandomKey(64))
+	authFile, err := LoadAuthFile(authKeyFile, false, 64)
+	if err != nil {
+		log.Fatalln("[FATAL] LoadAuthFile():", err)
+	}
+
+	sessionStore = sessions.NewCookieStore(authFile.AsKeyPairs()...)
 	sessionStore.MaxAge(int(24 * time.Hour))
 
 	/* app files */
 
-	err := LoadTemplates()
-	if err != nil {
+	if err := LoadTemplates(); err != nil {
 		log.Println("[ERROR] Loading app files:", err)
 		exitCode = 1
 		return

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -24,10 +26,12 @@ func SessionRun(session *sessions.Session, r *http.Request) error {
 	// if this session isn't new, then it (likely) already has a container running
 	// let's stop that container
 	if !session.IsNew && session.Values[sessionContainerKey] != "" {
-		err := docker.ContainerStop(r.Context(), session.Values[sessionContainerKey].(string), nil)
-		if err != nil {
-			log.Printf("[WARN]: Error attempting to stop container %s: %s\n", session.Values[sessionContainerKey], err)
-		}
+		go func(key string) {
+			err := docker.ContainerStop(context.Background(), key, nil)
+			if err != nil {
+				log.Printf("[WARN]: Error attempting to stop container %s: %s\n", key, err)
+			}
+		}(session.Values[sessionContainerKey].(string))
 	}
 
 	// we need to launch a new container for the matching image
@@ -63,19 +67,40 @@ func SessionRun(session *sessions.Session, r *http.Request) error {
 		AttachStdout: true,
 		OpenStdin:    true,
 	}, nil, nil, "")
-
-	for _, w := range ctnr.Warnings {
-		log.Printf("[WARN]: ContainerCreate(%s): %s\n", refStr, w)
+	if err != nil {
+		log.Printf("[ERROR] ContainerCreate(%s): %s\n", refStr, err)
+		return err
 	}
 
-	// switch contexts in order to keep the container running after this request finishes!
+	for _, w := range ctnr.Warnings {
+		log.Printf("[WARN] ContainerCreate(%s): %s\n", refStr, w)
+	}
+
+	updateOk, err := docker.ContainerUpdate(r.Context(), ctnr.ID, container.UpdateConfig{
+		Resources: container.Resources{
+			CPUShares: 256,
+			Memory: 64 * 1024 * 1024, // 64 MB
+			NanoCPUs: int64(30 * time.Second),
+			DiskQuota: 16 * 1024, // 16 KB
+		},
+	})
+	if err != nil {
+		log.Printf("[ERROR] ContainerUpdate(%s): %s\n", refStr, err)
+		return err
+	}
+
+	for _, w := range updateOk.Warnings {
+		log.Printf("[WARN] ContainerUpdate(%s): %s\n", refStr, w)
+	}
+
 	err = docker.ContainerStart(r.Context(), ctnr.ID, types.ContainerStartOptions{})
 	if err != nil {
 		docker.ContainerRemove(r.Context(), ctnr.ID, types.ContainerRemoveOptions{})
+		log.Printf("[ERROR] ContainerStart(%s): %s\n", refStr, err)
 		return err
 	}
 
 	session.Values[sessionContainerKey] = ctnr.ID
 
-	return err
+	return nil
 }

@@ -3,16 +3,18 @@
 "use strict";
 
 // for loading more syntax modes at runtime as needed
-const codeMirrorModesCDN = "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.35.0/mode/%%/%%.min.js";
+CodeMirror.modeURL = "https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.35.0/mode/%N/%N.min.js";
 
 /** @type {CodeMirror} */
-let codeMirrorEditor = null;
+let editor = null;
 
 // preferred default options for CodeMirror editors
 let editorOpts           = CodeMirror.defaults;
 editorOpts.lineSeparator = "\n";
 editorOpts.indentUnit    = 4;
 editorOpts.lineNumbers   = true;
+editorOpts.tabindex      = 0;
+editorOpts.autofocus     = true;
 
 /** @type {Element} */
 let fileTemplate = null;
@@ -33,7 +35,7 @@ window.onload = function()
 {
     let editorElem = document.querySelector("textarea.editor");
 
-    codeMirrorEditor = CodeMirror.fromTextArea(editorElem, editorOpts);
+    editor = CodeMirror.fromTextArea(editorElem, editorOpts);
 
     pwd = document.querySelector("#pwd");
 
@@ -95,7 +97,9 @@ function switchFile(event)
     let file = (/** @type {Element} */ event.currentTarget)
         .parentElement; // li
 
-    codeMirrorEditor.swapDoc(documents[getFullFilename(file)]);
+    let filename = getFullFilename(file);
+    editor.swapDoc(documents[filename]);
+    editor.setOption("mode", CodeMirror.findModeByFileName(filename));
 }
 
 /**
@@ -125,27 +129,26 @@ function newFileOrDir(event)
  */
 function newFile(parent, filename)
 {
-    (/** @type {Element} */ fileTemplate).content.querySelector("a")
-        .textContent = filename;
-
     let clone = document.importNode((/** @type {Element} */ fileTemplate).content, true);
     parent.appendChild(clone);
 
     let file = parent.lastElementChild;
 
+    file.querySelector("a").textContent = filename;
     file.querySelector("a")
         .addEventListener("click", /** @type {EventListener} */ switchFile);
 
     file.querySelector("button.delete")
         .addEventListener("click", /** @type {EventListener} */ delFile);
 
+    let doc = CodeMirror.Doc("");
+
+    documents[getFullFilename(file)] = doc;
+    editor.swapDoc(doc);
+
     let syntaxMode = CodeMirror.findModeByFileName(filename);
     if(syntaxMode)
-        loadSyntaxMode(syntaxMode.mode);
-
-    let doc                          = new CodeMirror.Doc("", syntaxMode);
-    documents[getFullFilename(file)] = doc;
-    codeMirrorEditor.swapDoc(doc);
+        CodeMirror.autoLoadMode(editor, syntaxMode.mode);
 }
 
 /**
@@ -155,14 +158,12 @@ function newFile(parent, filename)
  */
 function newDir(parent, dirname)
 {
-    (/** @type {Element} */ dirTemplate).content.querySelector("span")
-        .textContent = dirname;
-
     let clone = document.importNode((/** @type {Element} */ dirTemplate).content, true);
     parent.appendChild(clone);
 
     let dir = parent.lastElementChild;
 
+    dir.querySelector("button.new").textContent = dirname;
     dir.querySelector("button.new")
        .addEventListener("click", /** @type {EventListener} */ newFileOrDir);
 
@@ -269,29 +270,5 @@ function getFullFilename(current)
 
     // don't need to join on path separators - the directories already have one in their name
     return pathArr.join("");
-}
-
-/**
- * Adds a script tag to the current document's head with a src for a CDN'd CodeMirror syntax mode
- * (Only does so if the mode hasn't already been loaded)
- * @param {string} mode
- */
-function loadSyntaxMode(mode)
-{
-    let src     = codeMirrorModesCDN.replace(/%%/g, mode);
-    let scripts = document.querySelectorAll("script");
-
-    for(let s of scripts)
-    {
-        // if we already have it, we're done
-        if(src === s.getAttribute("src"))
-            return;
-    }
-
-    // don't already have it, go get it
-    let script = document.createElement("script");
-    script.setAttribute("type", "text/javascript");
-    script.setAttribute("src", src);
-    document.getElementsByTagName("head")[0].appendChild(script);
 }
 }());

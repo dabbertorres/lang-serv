@@ -53,13 +53,13 @@ func CloseTemplates() {
 	}
 }
 
-func IndexPage(w io.Writer, data IndexPageData) error {
+func IndexPage(w io.Writer, data IndexGetData) error {
 	templatesMutex.RLock()
 	defer templatesMutex.RUnlock()
 	return htmlTemplates.ExecuteTemplate(w, "index.html", data)
 }
 
-func LanguagePage(w io.Writer, data LanguagePageData) error {
+func LanguagePage(w io.Writer, data LanguageGetData) error {
 	templatesMutex.RLock()
 	defer templatesMutex.RUnlock()
 	return htmlTemplates.ExecuteTemplate(w, "lang.html", data)
