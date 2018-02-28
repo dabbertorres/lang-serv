@@ -7,12 +7,12 @@
     <title>{{ .Language }}-{{ .Version }}</title>
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.35.0/codemirror.min.css">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="/style.css">
 
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.35.0/codemirror.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.35.0/mode/meta.min.js"></script>
     <!-- we don't load any modes here, as we load them only as needed -->
-    <script defer src="lang.js"></script>
+    <script defer src="/lang.js"></script>
 
     <template id="fileTemplate">
         <li>
@@ -24,8 +24,8 @@
         <li>
             <span>baz</span>
             <span>
-                <button class="new"><img src="new.svg"></button>
-                <button class="delete"><img src="delete.svg"></button>
+                <button class="new"><img src="/new.svg"></button>
+                <button class="delete"><img src="/delete.svg"></button>
             </span>
             <ul></ul>
         </li>
@@ -51,10 +51,11 @@
         <textarea class="editor" title="fileName"></textarea>
     </main>
     <hr>
-    <label for="cmd">Command:</label><input type="text" id="cmd">
-    <button id="submitButton">Run</button>
+    <label for="runCommand">Command:</label><input type="text" id="runCommand">
+    <button id="runButton">Run</button>
+    <progress id="runProgress" value="0"></progress>
     <h3>Output</h3>
-    <textarea class="output" title="output" rows="24" readonly></textarea>
+    <textarea id="outputArea" title="outputArea" rows="24" readonly></textarea>
     <footer></footer>
 </body>
 </html>

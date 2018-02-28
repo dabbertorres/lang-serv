@@ -20,7 +20,7 @@ let fileTemplate = null;
 /** @type {Element} */
 let dirTemplate = null;
 
-/** @type {Object<Node, CodeMirror.Doc>} */
+/** @type {Object<string, CodeMirror.Doc>} */
 let documents = {};
 
 /**
@@ -40,6 +40,9 @@ window.onload = function()
     pwd.querySelector("button")
        .addEventListener("click", newFileOrDir);
 
+    document.querySelector("#runButton")
+            .addEventListener("click", /** @type {EventListener} */ run);
+
     fileTemplate = document.querySelector("#fileTemplate");
     dirTemplate  = document.querySelector("#dirTemplate");
 
@@ -53,14 +56,46 @@ window.onload = function()
 };
 
 /**
+ * Grabs all file contents, the runCommand, and sends it to the server
+ * @param {MouseEvent} event
+ */
+function run(event)
+{
+    let progressBar = document.querySelector("#runProgress");
+    let outputArea  = document.querySelector("#outputArea");
+
+    let req = new XMLHttpRequest();
+    req.open("POST", window.location.href);
+    req.setRequestHeader("Content-Type", "application/json");
+
+    req.addEventListener("progress", function(event)
+    {
+        if(event.lengthComputable)
+            progressBar.setAttribute("value", (event.loaded / event.total).toString());
+    });
+
+    req.addEventListener("error", () => outputArea.value = "An error occured.");
+    req.addEventListener("abort", () => outputArea.value = "Run request was cancelled.");
+    req.addEventListener("load", () => outputArea.value = req.responseText);
+
+    let runCmd = {
+        cmd:   document.querySelector("#runCommand").value,
+        files: walkWorkingDirectory(),
+    };
+
+    req.send(JSON.stringify(runCmd));
+}
+
+/**
  * switches the CodeMirror editor's current Doc to the Doc related to the file of event.target
  * @param {MouseEvent} event
  */
 function switchFile(event)
 {
-    let link = event.currentTarget;
+    let file = (/** @type {Element} */ event.currentTarget)
+        .parentElement; // li
 
-    // TODO
+    codeMirrorEditor.swapDoc(documents[getFullFilename(file)]);
 }
 
 /**
@@ -90,7 +125,7 @@ function newFileOrDir(event)
  */
 function newFile(parent, filename)
 {
-    (/** @type {Element} */ fileTemplate).content.querySelector("li a")
+    (/** @type {Element} */ fileTemplate).content.querySelector("a")
         .textContent = filename;
 
     let clone = document.importNode((/** @type {Element} */ fileTemplate).content, true);
@@ -99,17 +134,18 @@ function newFile(parent, filename)
     let file = parent.lastElementChild;
 
     file.querySelector("a")
-        .addEventListener("click", /** @type {EventListener}*/ switchFile);
+        .addEventListener("click", /** @type {EventListener} */ switchFile);
 
     file.querySelector("button.delete")
-        .addEventListener("click", /** @type {EventListener}*/ delFile);
+        .addEventListener("click", /** @type {EventListener} */ delFile);
 
     let syntaxMode = CodeMirror.findModeByFileName(filename);
-    loadSyntaxMode(syntaxMode.mode);
+    if(syntaxMode)
+        loadSyntaxMode(syntaxMode.mode);
 
-    let doc = new CodeMirror.Doc("", syntaxMode);
+    let doc                          = new CodeMirror.Doc("", syntaxMode);
+    documents[getFullFilename(file)] = doc;
     codeMirrorEditor.swapDoc(doc);
-    documents[file] = doc;
 }
 
 /**
@@ -128,10 +164,10 @@ function newDir(parent, dirname)
     let dir = parent.lastElementChild;
 
     dir.querySelector("button.new")
-       .addEventListener("click", /** @type {EventListener}*/ newFileOrDir);
+       .addEventListener("click", /** @type {EventListener} */ newFileOrDir);
 
     dir.querySelector("button.delete")
-       .addEventListener("click", /** @type {EventListener}*/ delDir);
+       .addEventListener("click", /** @type {EventListener} */ delDir);
 }
 
 /**
@@ -143,7 +179,7 @@ function delFile(event)
     let file = (/** @type {Element} */ event.currentTarget)
         .parentElement  // span
         .parentElement; // li
-    delete documents[file];
+    delete documents[getFullFilename(file)];
     file.parentElement.removeChild(file);
 }
 
@@ -179,18 +215,39 @@ function clearDir(dir)
         // if cn contains an 'a' Element, it's a file
 
         if(cn.querySelector("a"))
-            delete documents[cn];
+            delete documents[getFullFilename(cn)];
         else
             clearDir(cn.querySelector("ul"));
     }
 }
 
 /**
- * TODO
+ * @param {!Element=} top If evaluates to false, pwd is used
+ * @param {!string=} prefix The filename prefix to prepend to children of top
+ * @returns {Array<Object<string>>}
  */
-function walkWorkingDirectory()
+function walkWorkingDirectory(top, prefix)
 {
-    // TODO
+    top    = top || pwd;
+    prefix = prefix || "";
+
+    let files = [];
+
+    for(let child of top.querySelector("ul").children)
+    {
+        // if child contains an 'a' Element, it's a file
+        let name = prefix + child.firstElementChild.textContent;
+
+        if(child.querySelector("a"))
+            files.push({
+                           name: name,
+                           data: documents[name].getValue(),
+                       });
+        else
+            files = files.push(...walkWorkingDirectory(child, name));
+    }
+
+    return files;
 }
 
 /**
@@ -204,10 +261,14 @@ function getFullFilename(current)
 
     while(current !== pwd)
     {
-        pathArr.push(current);
+        pathArr.unshift(current.firstElementChild.textContent);
+        current = current
+            .parentElement  // ul
+            .parentElement; // li
     }
 
-    return pathArr.join("/");
+    // don't need to join on path separators - the directories already have one in their name
+    return pathArr.join("");
 }
 
 /**
