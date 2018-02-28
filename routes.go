@@ -96,20 +96,18 @@ func languageGetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if session.IsNew {
-		err = NewSession(session, r)
-		if err != nil {
-			log.Printf("%s: %s\n", r.RequestURI, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	err = SessionRun(session, r)
+	if err != nil {
+		log.Printf("%s: %s\n", r.RequestURI, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-		err = session.Save(r, w)
-		if err != nil {
-			log.Printf("%s: %s\n", r.RequestURI, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	err = session.Save(r, w)
+	if err != nil {
+		log.Printf("%s: %s\n", r.RequestURI, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	err = LanguagePage(w, LanguagePageData{
@@ -134,6 +132,7 @@ func languagePostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if session.IsNew {
+		// TODO this isn't necessarily a problem
 		log.Printf("%s: %s\n", r.RequestURI, "new session in POST")
 		session.Options.MaxAge = -1
 		http.Error(w, err.Error(), http.StatusForbidden)

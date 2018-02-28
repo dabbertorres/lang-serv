@@ -20,7 +20,16 @@ const (
 	containerWorkingDirectory = "/work-area/"
 )
 
-func NewSession(session *sessions.Session, r *http.Request) error {
+func SessionRun(session *sessions.Session, r *http.Request) error {
+	// if this session isn't new, then it (likely) already has a container running
+	// let's stop that container
+	if !session.IsNew && session.Values[sessionContainerKey] != "" {
+		err := docker.ContainerStop(r.Context(), session.Values[sessionContainerKey].(string), nil)
+		if err != nil {
+			log.Printf("[WARN]: Error attempting to stop container %s: %s\n", session.Values[sessionContainerKey], err)
+		}
+	}
+
 	// we need to launch a new container for the matching image
 	refStr := fmt.Sprintf("%s:%s", mux.Vars(r)["language"], mux.Vars(r)["version"])
 
