@@ -6,13 +6,8 @@ type File struct {
 }
 
 type LanguagePost struct {
-	Cmd   []string `json:"cmd"`
-	Env   []string `json:"env"`
-	Files []File   `json:"files"`
-}
-
-type LanguagePostResponse struct {
-	Output []string `json:"output"`
+	Cmd   string `json:"cmd"`
+	Files []File `json:"files"`
 }
 
 type LanguagePageData struct {

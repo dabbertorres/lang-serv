@@ -5,10 +5,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
+	"mime"
 	"net/http"
+	"path"
+	"strings"
 
 	"github.com/docker/docker/api/types"
 	"github.com/gorilla/mux"
@@ -37,7 +39,7 @@ func Route() (router *mux.Router) {
 		Methods(http.MethodGet).
 		HandlerFunc(staticFileHandler("app/delete.svg"))
 
-	languageRouter := router.Path("/lang/{language}/{version}").Subrouter()
+	languageRouter := router.Path("/{language}/{version}").Subrouter()
 
 	// opening a new session for a language
 	languageRouter.
@@ -53,7 +55,7 @@ func Route() (router *mux.Router) {
 	// TODO sending all files/etc every POST is a little overkill
 
 	// redirect to /{language}/latest
-	router.Path("/lang/{language}").
+	router.Path("/{language}").
 		Methods(http.MethodGet).
 		HandlerFunc(languageLatestSymlinkHandler)
 
@@ -81,6 +83,7 @@ func staticFileHandler(filename string) http.HandlerFunc {
 			return
 		}
 
+		w.Header().Set("Content-Type", mime.TypeByExtension(path.Ext(filename)))
 		w.Write(buf)
 	}
 }
@@ -121,10 +124,7 @@ func languageGetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func languagePostHandler(w http.ResponseWriter, r *http.Request) {
-	var (
-		dec = json.NewDecoder(r.Body)
-		enc = json.NewEncoder(w)
-	)
+	dec := json.NewDecoder(r.Body)
 
 	session, err := sessionStore.Get(r, sessionCookieKey)
 	if err != nil {
@@ -141,14 +141,14 @@ func languagePostHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		post         LanguagePost
+		post         = LanguagePost{}
 		ctnr         = session.Values[sessionContainerKey].(string)
 		filesArchive = bytes.NewBuffer(nil)
 		tarW         = tar.NewWriter(filesArchive)
 	)
 
 	if err := dec.Decode(&post); err != nil {
-		log.Printf("[ERROR] %s:  %s\n", r.RequestURI, err)
+		log.Printf("[ERROR] %s: %s\n", r.RequestURI, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -164,6 +164,18 @@ func languagePostHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		_, err = tarW.Write([]byte(f.Data))
+		if err != nil {
+			log.Printf("[ERROR] %s: writing tar file: %s\n", r.RequestURI, err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	err = tarW.Close()
+	if err != nil {
+		log.Printf("[ERROR] %s: closing tar file: %s\n", r.RequestURI, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	err = docker.CopyToContainer(r.Context(), ctnr, containerWorkingDirectory,
@@ -174,46 +186,35 @@ func languagePostHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO TODO uhh, executable name?
 	execCfg := types.ExecConfig{
 		AttachStderr: true,
 		AttachStdout: true,
-		Env:          post.Env,
-		Cmd:          post.Cmd,
+		Cmd:          strings.Fields(strings.TrimSpace(post.Cmd)),
 	}
 
 	execResp, err := docker.ContainerExecCreate(r.Context(), ctnr, execCfg)
 	if err != nil {
-		log.Printf("%s: %s\n", r.RequestURI, err)
+		log.Printf("[ERROR] docker.ContainerExecCreate(): %s: %s. Command: %v\n", r.RequestURI, err, execCfg.Cmd)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	hijack, err := docker.ContainerExecAttach(r.Context(), execResp.ID, execCfg)
 	if err != nil {
-		log.Printf("%s: %s\n", r.RequestURI, err)
+		log.Printf("[ERROR] docker.ContainerExecAttach(): %s: %s\n", r.RequestURI, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	resp := LanguagePostResponse{}
-
-	var line string
-	for line, err = hijack.Reader.ReadString('\n'); err != nil; line, err = hijack.Reader.ReadString('\n') {
-		resp.Output = append(resp.Output, line)
-	}
-
-	if err != io.EOF {
-		log.Printf("%s: %s\n", r.RequestURI, err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	err = enc.Encode(resp)
+	output, err := ioutil.ReadAll(hijack.Reader)
 	if err != nil {
-		log.Printf("%s: %s\n", r.RequestURI, err)
+		log.Printf("[ERROR] Reading container output: %s: %s\n", r.RequestURI, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
+
+	// don't write the first 8 bytes because they seem to be an 8 byte integer representing the string's length
+	fmt.Fprint(w, string(output[8:]))
 }
 
 func languageLatestSymlinkHandler(w http.ResponseWriter, r *http.Request) {
