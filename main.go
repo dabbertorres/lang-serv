@@ -22,23 +22,21 @@ var (
 
 	logToFile bool
 	authKeyFile = "auth.keys"
+	certFile string
+	keyFile string
 )
 
 func init() {
 	flag.BoolVar(&logToFile, "log-file", false, "passing enables duplicating logs to a log file")
 	flag.StringVar(&authKeyFile, "auth-file", authKeyFile, "specify a file to use for storing session authentication keys")
-
-	var err error
-	docker, err = client.NewEnvClient()
-	if err != nil {
-		log.Println("[FATAL] Creating docker client connection error:", err)
-		os.Exit(1)
-	}
+	flag.StringVar(&certFile, "cert-file", "", "the path to the HTTPS cert file")
+	flag.StringVar(&keyFile, "key-file", "", "the path the the HTTPS key file")
 }
 
 func main() {
 	defer os.Exit(exitCode)
-	defer docker.Close()
+
+	flag.Parse()
 
 	/* logging config */
 
@@ -55,11 +53,24 @@ func main() {
 	}
 	log.SetOutput(logOut)
 
+	/* docker */
+
+	var err error
+	docker, err = client.NewEnvClient()
+	if err != nil {
+		log.Println("[FATAL] Creating docker client connection error:", err)
+		exitCode = 1
+		return
+	}
+	defer docker.Close()
+
 	/* sessions */
 
 	authFile, err := LoadAuthFile(authKeyFile, false, 64)
 	if err != nil {
-		log.Fatalln("[FATAL] LoadAuthFile():", err)
+		log.Println("[FATAL] LoadAuthFile():", err)
+		exitCode = 1
+		return
 	}
 
 	sessionStore = sessions.NewCookieStore(authFile.AsKeyPairs()...)
@@ -85,15 +96,25 @@ func main() {
 	// could be extended to allow for account creation and enable persistence
 
 	server := &http.Server{
-		Addr:         ":8080",
+		Addr:         ":80",
 		IdleTimeout:  15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		Handler:      router,
 	}
 
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
-		fmt.Println("Unexpected ListenAndServe() error:", err)
+	secureServer := *server
+	secureServer.Addr = ":443"
+
+	go func() {
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+			fmt.Println("Unexpected ListenAndServe() error:", err)
+			exitCode = 1
+		}
+	}()
+
+	if err := secureServer.ListenAndServeTLS(certFile, keyFile); err != http.ErrServerClosed {
+		fmt.Println("Unexpected ListenAndServeTLS() error:", err)
 		exitCode = 1
 	}
 }

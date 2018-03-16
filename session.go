@@ -50,13 +50,13 @@ func SessionRun(session *sessions.Session, r *http.Request) error {
 
 	// if no results, we need to pull the image
 	if len(images) == 0 {
-		// TODO may want to run this outside of r's context, to avoid timing out (see next comment)
 		// TODO run this in a goroutine, let user know the container is being prepared, and live update them when ready
-		read, err := docker.ImagePull(r.Context(), refStr, types.ImagePullOptions{})
+		read, err := docker.ImagePull(context.Background(), refStr, types.ImagePullOptions{})
 		if err != nil {
 			return err
 		}
 		io.Copy(os.Stdout, read)
+		read.Close()
 	}
 
 	ctnr, err := docker.ContainerCreate(r.Context(), &container.Config{
@@ -80,7 +80,7 @@ func SessionRun(session *sessions.Session, r *http.Request) error {
 		Resources: container.Resources{
 			CPUShares: 256,
 			Memory: 64 * 1024 * 1024, // 64 MB
-			NanoCPUs: int64(30 * time.Second),
+			NanoCPUs: int64(5 * time.Nanosecond), // TODO get CPUs available to determine this value
 			DiskQuota: 16 * 1024, // 16 KB
 		},
 	})

@@ -207,9 +207,16 @@ func languagePostHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	hijack.Close()
 
-	// don't write the first 8 bytes because they seem to be an 8 byte integer representing the string's length
-	fmt.Fprint(w, string(output[8:]))
+	if output != nil && len(output) > 0 {
+		// there may be escape sequences and such for formatting the output, let's process those
+		outStr := FormatTermToHTML(output)
+		fmt.Fprint(w, outStr)
+	} else {
+		// let the user know that no output is good output
+		fmt.Fprint(w, "Done")
+	}
 }
 
 func languageLatestSymlinkHandler(w http.ResponseWriter, r *http.Request) {

@@ -76,9 +76,9 @@ function run(event)
             progressBar.setAttribute("value", (event.loaded / event.total).toString());
     });
 
-    req.addEventListener("error", () => outputArea.value = "An error occured.");
-    req.addEventListener("abort", () => outputArea.value = "Run request was cancelled.");
-    req.addEventListener("load", () => outputArea.value = req.responseText);
+    req.addEventListener("error", () => outputArea.textContent = "An error occured.");
+    req.addEventListener("abort", () => outputArea.textContent = "Run request was cancelled.");
+    req.addEventListener("load", () => outputArea.textContent = req.responseText);
 
     let runCmd = {
         cmd:   document.querySelector("#runCommand").value,
